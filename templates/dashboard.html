@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accident Dashboard - GuardianAI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<nav>
+    <div class="nav-container">
+        <h2 class="logo">🚨 GuardianAI</h2>
+        <div class="nav-links">
+            <a href="/" class="btn btn-secondary">🏠 Home</a>
+            <a href="/live" class="btn btn-secondary">▶️ Live Detection</a>
+        </div>
+    </div>
+</nav>
+
+<div class="dashboard-container">
+    <h1>📊 Accident History & Analytics</h1>
+    
+    <div class="dashboard-stats">
+        <div class="stat-card">
+            <h3>Total Incidents</h3>
+            <p class="stat-number" id="totalIncidents">0</p>
+        </div>
+        <div class="stat-card">
+            <h3>Average Confidence</h3>
+            <p class="stat-number" id="avgConfidence">0%</p>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>📅 Date</th>
+                    <th>⏰ Time</th>
+                    <th>📈 Confidence Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if accidents %}
+                    {% for a in accidents %}
+                    <tr>
+                        <td>{{ a.Date }}</td>
+                        <td>{{ a.Time }}</td>
+                        <td><span class="confidence-badge">{{ a.Confidence }}%</span></td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr class="no-data">
+                        <td colspan="3">No accident incidents recorded yet</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // Calculate statistics
+    const accidents = {{ accidents|tojson }};
+    if (accidents.length > 0) {
+        document.getElementById('totalIncidents').innerText = accidents.length;
+        const avgConf = (accidents.reduce((sum, a) => sum + parseFloat(a.Confidence), 0) / accidents.length).toFixed(1);
+        document.getElementById('avgConfidence').innerText = avgConf + '%';
+    }
+</script>
+
+</body>
+</html>

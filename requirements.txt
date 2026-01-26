@@ -1,0 +1,5 @@
+Flask==2.3.3
+opencv-python==4.8.1.78
+ultralytics==8.0.196
+pandas==2.1.1
+Werkzeug==2.3.7

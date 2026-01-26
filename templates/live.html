@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Detection - GuardianAI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<nav>
+    <div class="nav-container">
+        <h2 class="logo">🚨 GuardianAI</h2>
+        <div class="nav-links">
+            <a href="/" class="btn btn-secondary">🏠 Home</a>
+            <a href="/dashboard" class="btn btn-secondary">📊 Dashboard</a>
+        </div>
+    </div>
+</nav>
+
+<div class="live-container">
+    <h1>📹 Live Accident Detection</h1>
+
+    <div class="camera-wrapper">
+        <div class="camera">
+            <img src="{{ url_for('video_feed') }}" alt="Live video feed from camera" loading="lazy">
+        </div>
+    </div>
+
+    <div class="status-box">
+        <div class="status-header">
+            <h2>System Status</h2>
+            <span id="statusText" class="status-badge safe">● Normal</span>
+        </div>
+        <div class="status-info">
+            <div class="info-item">
+                <label>Detection Status:</label>
+                <p id="statusDetail">No accident detected</p>
+            </div>
+            <div class="info-item">
+                <label>Confidence Level:</label>
+                <div class="confidence-bar">
+                    <div class="confidence-fill" id="confBar"></div>
+                </div>
+                <p id="conf">0%</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 🔊 ALERT SOUND -->
+<audio id="alertSound">
+    <source src="{{ url_for('static', filename='alert.mp3') }}" type="audio/mpeg">
+</audio>
+
+<script>
+let lastStatus = "Normal";
+
+setInterval(() => {
+    fetch("/live_status")
+        .then(res => res.json())
+        .then(data => {
+            const statusText = document.getElementById("statusText");
+            const statusDetail = document.getElementById("statusDetail");
+            const confText = document.getElementById("conf");
+            const confBar = document.getElementById("confBar");
+            const alertSound = document.getElementById("alertSound");
+
+            statusText.innerText = data.status === "ACCIDENT DETECTED" ? "● ACCIDENT!" : "● Normal";
+            statusDetail.innerText = data.status === "ACCIDENT DETECTED" ? "Accident Detected!" : "No accident detected";
+            confText.innerText = data.confidence + "%";
+            confBar.style.width = data.confidence + "%";
+
+            if (data.status === "ACCIDENT DETECTED") {
+                statusText.className = "status-badge danger";
+                if (lastStatus !== "ACCIDENT DETECTED") {
+                    alertSound.play();
+                }
+            } else {
+                statusText.className = "status-badge safe";
+            }
+
+            lastStatus = data.status;
+        });
+}, 1000);
+</script>
+
+</body>
+</html>
