@@ -1,19 +1,28 @@
 from flask import Flask, render_template, Response, jsonify
-import cv2, csv, os
+import cv2
+import csv
+import os
 from ultralytics import YOLO
 from datetime import datetime
 import pandas as pd
-import threading
 import logging
+import threading
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Load model
-model = YOLO("best.pt")
+# Load YOLO model
+try:
+    model = YOLO("best.pt")
+    logger.info("YOLO model loaded successfully")
+except Exception as e:
+    logger.error(f"Error loading YOLO model: {e}")
+    model = None
 
-# Configuration - Replace with your IP camera URL
-CAMERA_URL = os.getenv("CAMERA_URL", "rtsp://192.168.1.100:554/stream")  # Change this
+# Configuration
+CAMERA_URL = os.getenv("CAMERA_URL", "0")
+LOG_FILE = "accident_log.csv"
 
 # Global variables
 accident_status = "Normal"
@@ -21,11 +30,10 @@ confidence_score = 0
 alert_sent = False
 current_frame = None
 camera = None
-
-LOG_FILE = "accident_log.csv"
+camera_lock = threading.Lock()
 
 def log_accident(conf):
-    """Log accident to CSV file"""
+    """Log accident detection to CSV file"""
     exists = os.path.isfile(LOG_FILE)
     try:
         with open(LOG_FILE, "a", newline="") as f:
@@ -34,38 +42,44 @@ def log_accident(conf):
                 writer.writerow(["Date", "Time", "Confidence"])
             now = datetime.now()
             writer.writerow([now.date(), now.time(), conf])
-        logging.info(f"Accident logged with confidence: {conf}")
+        logger.info(f"Accident logged with confidence: {conf}")
     except Exception as e:
-        logging.error(f"Error logging accident: {e}")
+        logger.error(f"Error logging accident: {e}")
 
 def connect_camera():
-    """Connect to IP camera with retry logic"""
-    max_retries = 5
+    """Connect to camera with retry logic"""
+    max_retries = 3
     retry_count = 0
     
     while retry_count < max_retries:
         try:
+            logger.info(f"Attempting to connect to camera: {CAMERA_URL}")
             cap = cv2.VideoCapture(CAMERA_URL)
+            
+            # Set timeout
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            
             if cap.isOpened():
-                logging.info("Camera connected successfully")
+                logger.info("Camera connected successfully")
                 return cap
             else:
-                logging.warning(f"Failed to open camera, retry {retry_count + 1}/{max_retries}")
+                logger.warning(f"Failed to open camera, retry {retry_count + 1}/{max_retries}")
+                cap.release()
                 retry_count += 1
         except Exception as e:
-            logging.error(f"Camera connection error: {e}")
+            logger.error(f"Camera connection error: {e}")
             retry_count += 1
     
-    logging.error("Failed to connect to camera after retries")
+    logger.error("Failed to connect to camera after retries")
     return None
 
 def generate_frames():
     """Generate video frames with accident detection"""
-    global accident_status, confidence_score, alert_sent, current_frame, camera
+    global accident_status, confidence_score, alert_sent, current_frame, camera, model
     
     camera = connect_camera()
     if camera is None:
-        logging.error("No camera available")
+        logger.error("No camera available")
         return
 
     frame_count = 0
@@ -75,42 +89,43 @@ def generate_frames():
             success, frame = camera.read()
             
             if not success:
-                logging.warning("Failed to read frame, attempting reconnect...")
+                logger.warning("Failed to read frame, attempting reconnect...")
                 camera.release()
                 camera = connect_camera()
                 if camera is None:
                     break
                 continue
             
-            # Resize frame for faster processing (optional)
+            # Resize frame for faster processing
             frame = cv2.resize(frame, (640, 480))
             current_frame = frame.copy()
             
             # Run YOLO detection
-            results = model(frame, conf=0.5)
-            detected = False
-            
-            for r in results:
-                for box in r.boxes:
-                    cls = int(box.cls[0])
-                    confidence_score = float(box.conf[0]) * 100
-                    
-                    # Class 0 = accident (adjust based on your model)
-                    if cls == 0 and confidence_score > 70:
-                        detected = True
+            if model is not None:
+                results = model(frame, conf=0.5)
+                detected = False
                 
-                # Draw results on frame
-                frame = r.plot()
-            
-            # Update accident status
-            if detected:
-                accident_status = "ACCIDENT DETECTED"
-                if not alert_sent:
-                    log_accident(confidence_score)
-                    alert_sent = True
-            else:
-                accident_status = "Normal"
-                alert_sent = False
+                for r in results:
+                    for box in r.boxes:
+                        cls = int(box.cls[0])
+                        confidence_score = float(box.conf[0]) * 100
+                        
+                        # Class 0 = accident (adjust based on your model)
+                        if cls == 0 and confidence_score > 70:
+                            detected = True
+                    
+                    # Draw results on frame
+                    frame = r.plot()
+                
+                # Update accident status
+                if detected:
+                    accident_status = "ACCIDENT DETECTED"
+                    if not alert_sent:
+                        log_accident(confidence_score)
+                        alert_sent = True
+                else:
+                    accident_status = "Normal"
+                    alert_sent = False
             
             # Encode frame to JPEG
             _, buffer = cv2.imencode(".jpg", frame)
@@ -121,10 +136,10 @@ def generate_frames():
             
             frame_count += 1
             if frame_count % 30 == 0:
-                logging.info(f"Processed {frame_count} frames")
+                logger.info(f"Processed {frame_count} frames - Status: {accident_status}")
         
         except Exception as e:
-            logging.error(f"Error in frame generation: {e}")
+            logger.error(f"Error in frame generation: {e}")
             break
     
     if camera:
@@ -150,7 +165,7 @@ def dashboard():
             data = []
         return render_template("dashboard.html", accidents=data)
     except Exception as e:
-        logging.error(f"Error loading dashboard: {e}")
+        logger.error(f"Error loading dashboard: {e}")
         return render_template("dashboard.html", accidents=[])
 
 @app.route("/video_feed")
@@ -165,13 +180,18 @@ def live_status():
     return jsonify({
         "status": accident_status,
         "confidence": int(confidence_score),
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
+        "camera_url": CAMERA_URL
     })
 
 @app.route("/health")
 def health():
-    """Health check endpoint"""
-    return jsonify({"status": "healthy"}), 200
+    """Health check endpoint for Render"""
+    return jsonify({
+        "status": "healthy",
+        "camera": "connected" if camera and camera.isOpened() else "disconnected",
+        "model": "loaded" if model is not None else "not loaded"
+    }), 200
 
 @app.route("/logs")
 def get_logs():
@@ -182,9 +202,22 @@ def get_logs():
             return jsonify(data), 200
         return jsonify([]), 200
     except Exception as e:
-        logging.error(f"Error retrieving logs: {e}")
+        logger.error(f"Error retrieving logs: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/reset_logs", methods=["POST"])
+def reset_logs():
+    """Reset accident logs"""
+    try:
+        if os.path.exists(LOG_FILE):
+            os.remove(LOG_FILE)
+            logger.info("Accident logs reset")
+            return jsonify({"message": "Logs reset successfully"}), 200
+        return jsonify({"message": "No logs to reset"}), 200
+    except Exception as e:
+        logger.error(f"Error resetting logs: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
