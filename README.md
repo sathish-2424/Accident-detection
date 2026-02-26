@@ -59,7 +59,6 @@ http://localhost:5000
 - **OpenCV**: Computer vision library for video processing
 - **YOLOv8 (Ultralytics)**: Object detection model
 - **Pandas**: Data analysis and CSV handling
-- **Werkzeug**: WSGI utility library
 
 ## How It Works
 
@@ -83,19 +82,3 @@ The `accident_log.csv` file contains the following columns:
 You can modify detection parameters in `app.py`:
 - Confidence threshold: Change `conf=0.5` in the model prediction
 - Detection threshold: Adjust `confidence_score > 70` for sensitivity
-
-## Requirements
-
-- Python 3.7+
-- Webcam or video source
-- GPU recommended for better performance (optional)
-
-## Notes
-
-- The model weights are pre-trained and stored in `best.pt`
-- Ensure proper lighting and camera angle for optimal detection
-- The system uses YOLOv8 for accurate and fast detection
-
-## License
-
-This project uses YOLOv8 which is licensed under AGPL-3.0.

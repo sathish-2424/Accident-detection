@@ -3,23 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Accident Dashboard - GuardianAI</title>
+    <title>Analytics Dashboard - Accident Detection</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
 <nav>
     <div class="nav-container">
-        <h2 class="logo">🚨 GuardianAI</h2>
+        <h2 class="logo">🚨 Accident Detection AI</h2>
         <div class="nav-links">
             <a href="/" class="btn btn-secondary">🏠 Home</a>
-            <a href="/live" class="btn btn-secondary">▶️ Live Detection</a>
+            <a href="/live" class="btn btn-secondary">▶️ Live Monitoring</a>
         </div>
     </div>
 </nav>
 
 <div class="dashboard-container">
-    <h1>📊 Accident History & Analytics</h1>
+    <h1>📊 Incident Analytics & History</h1>
     
     <div class="dashboard-stats">
         <div class="stat-card">
@@ -30,6 +30,10 @@
             <h3>Average Confidence</h3>
             <p class="stat-number" id="avgConfidence">0%</p>
         </div>
+        <div class="stat-card">
+            <h3>Highest Confidence</h3>
+            <p class="stat-number" id="maxConfidence">0%</p>
+        </div>
     </div>
 
     <div class="table-container">
@@ -38,7 +42,8 @@
                 <tr>
                     <th>📅 Date</th>
                     <th>⏰ Time</th>
-                    <th>📈 Confidence Score</th>
+                    <th>🎯 Confidence Score</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -48,11 +53,12 @@
                         <td>{{ a.Date }}</td>
                         <td>{{ a.Time }}</td>
                         <td><span class="confidence-badge">{{ a.Confidence }}%</span></td>
+                        <td style="text-align: right; color: #10b981; font-weight: 500;">Detected</td>
                     </tr>
                     {% endfor %}
                 {% else %}
                     <tr class="no-data">
-                        <td colspan="3">No accident incidents recorded yet</td>
+                        <td colspan="4">✓ No incidents recorded yet. Great job!</td>
                     </tr>
                 {% endif %}
             </tbody>
@@ -62,11 +68,16 @@
 
 <script>
     // Calculate statistics
-    const accidents = {{ accidents|tojson }};
-    if (accidents.length > 0) {
-        document.getElementById('totalIncidents').innerText = accidents.length;
-        const avgConf = (accidents.reduce((sum, a) => sum + parseFloat(a.Confidence), 0) / accidents.length).toFixed(1);
+    const accidentsData = {{ accidents|tojson }};
+    if (accidentsData.length > 0) {
+        document.getElementById('totalIncidents').innerText = accidentsData.length;
+        
+        const confidences = accidentsData.map(a => parseFloat(a.Confidence));
+        const avgConf = (confidences.reduce((sum, c) => sum + c, 0) / confidences.length).toFixed(1);
+        const maxConf = Math.max(...confidences).toFixed(1);
+        
         document.getElementById('avgConfidence').innerText = avgConf + '%';
+        document.getElementById('maxConfidence').innerText = maxConf + '%';
     }
 </script>
 
